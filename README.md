@@ -2,7 +2,7 @@
 
 A simple, to-scale, top-down room planner in a single HTML file. Open `index.html` in any browser.
 
-- Set the room size (`12' 6"`, `150`, `3.8m` all work; ft/in or cm).
+- Set the room shape: start from a rectangle, L-shape, angled corner or bay window, then edit each wall's length, drag walls and corners on the plan, or add bump-outs, notches and angled corners. Sizes can be typed as `12' 6"`, `150` or `3.8m` (ft/in or cm).
 - Add doors (with swing direction and hinge side), windows, closets and doorways, each with a keep-clear zone.
 - Add furniture from presets or custom sizes, then drag, rotate, duplicate or lock it.
 - Fit check flags overlaps, pieces past a wall, and anything in a door swing or in front of a closet.

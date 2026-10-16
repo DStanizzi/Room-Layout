@@ -141,6 +141,20 @@ label.f input.err { border-color: var(--bad); background: var(--bad-soft); }
 .list .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list .dim { font: 400 11.5px var(--mono); color: var(--muted); white-space: nowrap; }
 .list .flag { width: 7px; height: 7px; border-radius: 50%; background: var(--bad); flex: none; }
+.f-lab, .presets .grp, .card > .grp { font: 500 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.sub { font: 400 11px var(--mono); color: var(--muted); text-transform: none; letter-spacing: 0; }
+.shapes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.shape { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--floor); cursor: pointer; font-size: 11.5px; line-height: 1.2; text-align: center; }
+.shape:hover { border-color: var(--accent); }
+.shape svg { width: 44px; height: 32px; }
+.shape svg polygon { fill: var(--k-bed); stroke: var(--ink); stroke-width: 2.5; stroke-linejoin: round; }
+.walls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.wrow { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 7px; padding: 3px 3px 3px 3px; background: var(--floor); min-width: 0; }
+.wrow.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.wrow .wl { width: 26px; height: 26px; flex: none; border: 0; border-radius: 5px; background: var(--ink); color: var(--panel); font: 700 12px var(--mono); cursor: pointer; }
+.wrow.on .wl { background: var(--accent); color: var(--on-accent); }
+.wrow .wd { font: 500 13px var(--mono); color: var(--muted); width: 26px; text-align: center; flex: none; }
+.wrow input { flex: 1; min-width: 0; height: 26px; border: 0; background: transparent; font: 500 13px var(--mono); color: var(--ink); padding: 0 4px; }
 
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .stat { display: flex; flex-direction: column; gap: 2px; }
@@ -199,6 +213,18 @@ label.f input.err { border-color: var(--bad); background: var(--bad-soft); }
 #plan .meas .pilltext { fill: var(--on-accent); }
 #plan .meas.sel line:not(.hit) { stroke-dasharray: 6 3; }
 #plan .meas { cursor: pointer; }
+#plan .wallpoly { fill: var(--wall); stroke: var(--wall); stroke-linejoin: miter; stroke-miterlimit: 6; }
+#plan .wallhit { stroke: transparent; cursor: move; }
+#plan .wallsel { stroke: var(--accent); }
+#plan .wlabel { fill: var(--muted); font-weight: 500; }
+#plan .wlabel .wletter { fill: var(--ink); font-weight: 700; }
+#plan .wlabel.sel, #plan .wlabel.sel .wletter { fill: var(--accent); }
+#plan .corner { fill: var(--panel); stroke: var(--k-stroke); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: move; }
+#plan .corner:hover { stroke: var(--accent); }
+#plan .corner.sel { fill: var(--accent); stroke: var(--accent); }
+#plan .gl.acc { stroke: var(--accent); }
+#plan .pill.acc { fill: var(--accent); }
+#plan .pill.acc + .pilltext { fill: var(--on-accent); }
 #plan .snapdot { fill: var(--accent); }
 
 /* Backup panel */
@@ -292,25 +318,32 @@ const PRESETS = [
     { name: 'Bench', w: 48, d: 16, kind: 'seat' }, { name: 'Crib', w: 30, d: 54, kind: 'bed' } ] },
   { g: 'Rugs & obstacles', items: [
     { name: "5×8 rug", w: 96, d: 60, kind: 'rug' }, { name: "8×10 rug", w: 120, d: 96, kind: 'rug' },
-    { name: 'Radiator', w: 36, d: 6, kind: 'fixed' }, { name: 'Column / bump-out', w: 24, d: 24, kind: 'fixed' } ] },
+    { name: 'Radiator', w: 36, d: 6, kind: 'fixed' }, { name: 'Column', w: 24, d: 24, kind: 'fixed' } ] },
+];
+const SHAPES = [
+  { name: 'Rectangle', make: (W, H) => [[0, 0], [W, 0], [W, H], [0, H]] },
+  { name: 'L-shape', make: (W, H) => { const cw = Math.round(W / 3), ch = Math.round(H / 3); return [[0, 0], [W, 0], [W, H - ch], [W - cw, H - ch], [W - cw, H], [0, H]]; } },
+  { name: 'Angled corner', make: (W, H) => { const c = Math.round(Math.min(W, H) / 4); return [[0, 0], [W, 0], [W, H - c], [W - c, H], [0, H]]; } },
+  { name: 'Bay window', make: (W, H) => { const bw = Math.min(W - 12, Math.max(36, Math.round(W / 2))), a = Math.round((W - bw) / 2), d = Math.round(Math.min(24, bw / 3)); return [[0, 0], [a, 0], [a + d, -d], [a + bw - d, -d], [a + bw, 0], [W, 0], [W, H], [0, H]]; } },
 ];
 const OP_LABEL = { door: 'Door', window: 'Window', closet: 'Closet', opening: 'Open doorway' };
-const WALL_LABEL = { top: 'Top wall', right: 'Right wall', bottom: 'Bottom wall', left: 'Left wall' };
 const STORE_KEY = 'bedroom-layout-planner.v1';
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const f2 = n => (Math.round(n * 100) / 100).toString();
+const r2 = n => Math.round(n * 2) / 2;
+const letter = i => i < 26 ? String.fromCharCode(65 + i) : String(i + 1);
 
 function exampleLayout() {
   return {
     name: 'Example bedroom', example: true,
-    room: { w: 144, h: 168 },
+    room: { pts: [[0, 0], [144, 0], [144, 168], [0, 168]] },
     openings: [
-      { id: uid(), type: 'door', wall: 'bottom', offset: 104, width: 32, swing: 'in', hinge: 'end', clear: 0 },
-      { id: uid(), type: 'closet', wall: 'right', offset: 30, width: 60, swing: 'in', hinge: 'start', clear: 24 },
-      { id: uid(), type: 'window', wall: 'left', offset: 60, width: 48, swing: 'in', hinge: 'start', clear: 0 },
+      { id: uid(), type: 'door', wall: 2, offset: 8, width: 32, swing: 'in', hinge: 'start', clear: 0 },
+      { id: uid(), type: 'closet', wall: 1, offset: 30, width: 60, swing: 'in', hinge: 'start', clear: 24 },
+      { id: uid(), type: 'window', wall: 3, offset: 60, width: 48, swing: 'in', hinge: 'start', clear: 0 },
     ],
     items: [
       { id: uid(), name: 'Queen bed', w: 60, d: 80, x: 42, y: 0, rot: 0, kind: 'bed' },
@@ -323,7 +356,23 @@ function exampleLayout() {
   };
 }
 function blankLayout(n) {
-  return { name: 'Room ' + n, room: { w: 144, h: 144 }, openings: [{ id: uid(), type: 'door', wall: 'bottom', offset: 12, width: 32, swing: 'in', hinge: 'start', clear: 0 }], items: [], measures: [] };
+  return { name: 'Room ' + n, room: { pts: [[0, 0], [144, 0], [144, 144], [0, 144]] }, openings: [{ id: uid(), type: 'door', wall: 2, offset: 12, width: 32, swing: 'in', hinge: 'start', clear: 0 }], items: [], measures: [] };
+}
+// Older saves stored a rectangle as {w, h} with walls named top/right/bottom/left.
+function migrate(d) {
+  d.openings = d.openings || []; d.items = d.items || []; d.measures = d.measures || [];
+  if (d.room && Array.isArray(d.room.pts)) return d;
+  const W = (d.room && d.room.w) || 144, H = (d.room && d.room.h) || 144;
+  d.room = { pts: [[0, 0], [W, 0], [W, H], [0, H]] };
+  const map = { top: 0, right: 1, bottom: 2, left: 3 };
+  for (const o of d.openings) {
+    const w = typeof o.wall === 'number' ? o.wall : (map[o.wall] ?? 0);
+    if (typeof o.wall === 'string' && (w === 2 || w === 3)) { // these walls now run the other way
+      o.offset = (w === 2 ? W : H) - o.offset - o.width; o.hinge = o.hinge === 'start' ? 'end' : 'start';
+    }
+    o.wall = w;
+  }
+  return d;
 }
 
 /* ---------- storage ---------- */
@@ -332,6 +381,7 @@ try { store = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { store =
 if (!store || !Array.isArray(store.layouts) || !store.layouts.length) {
   const id = uid(); store = { units: 'imperial', active: id, layouts: [{ id, data: exampleLayout() }] };
 }
+store.layouts.forEach(l => migrate(l.data));
 let saveT;
 function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {} }, 200); }
 const activeLayout = () => store.layouts.find(l => l.id === store.active) || store.layouts[0];
@@ -371,35 +421,76 @@ function restore(json) { const d = JSON.parse(json); Object.keys(S).forEach(k =>
 function undo() { if (!undoStack.length) return; redoStack.push(snap()); restore(undoStack.pop()); }
 function redo() { if (!redoStack.length) return; undoStack.push(snap()); restore(redoStack.pop()); }
 
-/* ---------- geometry ---------- */
-function bbox(it) { const r = it.rot % 2; return { x: it.x, y: it.y, w: r ? it.d : it.w, h: r ? it.w : it.d }; }
-const wallLen = w => (w === 'top' || w === 'bottom') ? S.room.w : S.room.h;
-function toRoom(wall, u, v) {
-  const W = S.room.w, H = S.room.h;
-  switch (wall) { case 'top': return [u, v]; case 'bottom': return [u, H - v]; case 'left': return [v, u]; default: return [W - v, u]; }
+/* ---------- room geometry ---------- */
+const pts = () => S.room.pts;
+function signedArea(p) { let s = 0; for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; }
+function bounds() {
+  const p = pts(); let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of p) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
-function rectUV(wall, u0, u1, v0, v1) {
-  const [ax, ay] = toRoom(wall, u0, v0), [bx, by] = toRoom(wall, u1, v1);
-  return { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) };
+// Wall i runs from corner i to corner i+1. n points into the room.
+function wallSeg(i) {
+  const p = pts(), a = p[i], b = p[(i + 1) % p.length];
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1e-9, s = signedArea(p) >= 0 ? 1 : -1;
+  return { a, b, L, ux: dx / L, uy: dy / L, nx: -dy / L * s, ny: dx / L * s };
 }
-const overlap = (a, b, e = 0.05) => a.x < b.x + b.w - e && b.x < a.x + a.w - e && a.y < b.y + b.h - e && b.y < a.y + a.h - e;
-function inter(a, b) { const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y), x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h); return (x2 > x && y2 > y) ? { x, y, w: x2 - x, h: y2 - y } : null; }
-function zoneOf(o) {
-  if (o.type === 'door' && o.swing === 'in') {
-    const hu = o.hinge === 'start' ? o.offset : o.offset + o.width;
-    const [hx, hy] = toRoom(o.wall, hu, 0);
-    return { kind: 'sector', hx, hy, r: o.width, sq: rectUV(o.wall, o.offset, o.offset + o.width, 0, o.width) };
+const wallLen = i => wallSeg(i).L;
+function toRoom(i, u, v) { const w = wallSeg(i); return [w.a[0] + u * w.ux + v * w.nx, w.a[1] + u * w.uy + v * w.ny]; }
+const quadUV = (i, u0, u1, v0, v1) => [toRoom(i, u0, v0), toRoom(i, u1, v0), toRoom(i, u1, v1), toRoom(i, u0, v1)];
+const ptsAttr = p => p.map(q => q[0].toFixed(2) + ',' + q[1].toFixed(2)).join(' ');
+function projSeg(x, y, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1e-9;
+  const t = clamp(((x - a[0]) * dx + (y - a[1]) * dy) / L2, 0, 1), px = a[0] + t * dx, py = a[1] + t * dy;
+  return { d: Math.hypot(x - px, y - py), t, u: t * Math.sqrt(L2), x: px, y: py };
+}
+function pointInRoom(x, y) {
+  const p = pts(); let inside = false;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+    const [xi, yi] = p[i], [xj, yj] = p[j];
+    if (projSeg(x, y, p[j], p[i]).d < 0.06) return true;
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
   }
-  if (o.clear > 0) return { kind: 'rect', rect: rectUV(o.wall, o.offset, o.offset + o.width, 0, o.clear) };
+  return inside;
+}
+function rectInRoom(b) {
+  const c = [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]];
+  if (!c.every(([x, y]) => pointInRoom(x, y))) return false;
+  return !pts().some(([x, y]) => x > b.x + 0.06 && x < b.x + b.w - 0.06 && y > b.y + 0.06 && y < b.y + b.h - 0.06);
+}
+function wallDir(i) {
+  const w = wallSeg(i), a = Math.round(Math.atan2(w.uy, w.ux) * 180 / Math.PI);
+  const arrows = { 0: '→', 45: '↘', 90: '↓', 135: '↙', 180: '←', '-180': '←', '-135': '↖', '-90': '↑', '-45': '↗' };
+  return arrows[a] || ((a + 360) % 360) + '°';
+}
+
+/* ---------- item geometry ---------- */
+function bbox(it) { const r = it.rot % 2; return { x: it.x, y: it.y, w: r ? it.d : it.w, h: r ? it.w : it.d }; }
+const overlap = (a, b, e = 0.05) => a.x < b.x + b.w - e && b.x < a.x + a.w - e && a.y < b.y + b.h - e && b.y < a.y + a.h - e;
+// Separating-axis test between a convex polygon and an axis-aligned rectangle.
+function polyHitsRect(poly, r) {
+  const rp = [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]], axes = [[1, 0], [0, 1]];
+  for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length], ex = b[0] - a[0], ey = b[1] - a[1]; if (Math.hypot(ex, ey) > 1e-6) axes.push([-ey, ex]); }
+  for (const [ax, ay] of axes) {
+    let p0 = Infinity, p1 = -Infinity, q0 = Infinity, q1 = -Infinity;
+    for (const [x, y] of poly) { const d = x * ax + y * ay; p0 = Math.min(p0, d); p1 = Math.max(p1, d); }
+    for (const [x, y] of rp) { const d = x * ax + y * ay; q0 = Math.min(q0, d); q1 = Math.max(q1, d); }
+    if (p1 <= q0 + 1e-9 || q1 <= p0 + 1e-9) return false;
+  }
+  return true;
+}
+function doorArc(o, base, sv, steps) {
+  const hu = o.hinge === 'start' ? o.offset : o.offset + o.width, lu = o.hinge === 'start' ? o.offset + o.width : o.offset, dir = Math.sign(lu - hu) || 1;
+  const arc = [];
+  for (let k = 0; k <= steps; k++) { const a = (k / steps) * Math.PI / 2; arc.push(toRoom(o.wall, hu + dir * o.width * Math.cos(a), base + sv * o.width * Math.sin(a))); }
+  return { hinge: toRoom(o.wall, hu, base), arc };
+}
+function zoneOf(o) {
+  if (o.type === 'door' && o.swing === 'in') { const d = doorArc(o, 0, 1, 16); return [d.hinge, ...d.arc]; }
+  if (o.clear > 0) return quadUV(o.wall, o.offset, o.offset + o.width, 0, o.clear);
   return null;
 }
-function hitsZone(b, z) {
-  const sh = { x: b.x + 0.05, y: b.y + 0.05, w: b.w - 0.1, h: b.h - 0.1 };
-  if (z.kind === 'rect') return !!inter(sh, z.rect);
-  const I = inter(sh, z.sq); if (!I) return false;
-  const cx = clamp(z.hx, I.x, I.x + I.w), cy = clamp(z.hy, I.y, I.y + I.h);
-  return Math.hypot(cx - z.hx, cy - z.hy) < z.r;
-}
+const hitsZone = (b, z) => polyHitsRect(z, { x: b.x + 0.05, y: b.y + 0.05, w: b.w - 0.1, h: b.h - 0.1 });
 function opName(o) {
   const same = S.openings.filter(x => x.type === o.type);
   return OP_LABEL[o.type] + (same.length > 1 ? ' ' + (same.indexOf(o) + 1) : '');
@@ -407,11 +498,10 @@ function opName(o) {
 
 /* ---------- analysis ---------- */
 function analyze() {
-  const issues = [], bad = new Set(), W = S.room.w, H = S.room.h;
+  const issues = [], bad = new Set();
   const solid = S.items.filter(i => i.kind !== 'rug');
   for (const it of S.items) {
-    const b = bbox(it);
-    if (b.x < -0.05 || b.y < -0.05 || b.x + b.w > W + 0.05 || b.y + b.h > H + 0.05) { bad.add(it.id); issues.push({ id: it.id, msg: `${it.name} goes past the wall` }); }
+    if (!rectInRoom(bbox(it))) { bad.add(it.id); issues.push({ id: it.id, msg: `${it.name} goes past a wall` }); }
   }
   for (let i = 0; i < solid.length; i++) for (let j = i + 1; j < solid.length; j++) {
     if (overlap(bbox(solid[i]), bbox(solid[j]))) { bad.add(solid[i].id); bad.add(solid[j].id); issues.push({ id: solid[i].id, msg: `${solid[i].name} overlaps ${solid[j].name}` }); }
@@ -433,7 +523,7 @@ function analyze() {
 /* ---------- view state ---------- */
 let view = { z: 1, cx: null, cy: null };
 let tool = 'move', showGaps = true, snapOn = true, showGrid = true;
-let sel = null; // {type:'item'|'op'|'meas', id}
+let sel = null; // {type:'item'|'op'|'meas', id} or {type:'wall'|'corner', i}
 let drag = null, liveMeas = null, ppi = 1, lastAnalysis = { issues: [], bad: new Set() };
 const svg = document.getElementById('plan');
 const side = document.getElementById('side');
@@ -442,11 +532,13 @@ function findSel() {
   if (sel.type === 'item') return S.items.find(i => i.id === sel.id);
   if (sel.type === 'op') return S.openings.find(o => o.id === sel.id);
   if (sel.type === 'meas') return S.measures.find(m => m.id === sel.id);
+  if (sel.type === 'wall' || sel.type === 'corner') return sel.i < pts().length ? { i: sel.i } : null;
 }
 function toPt(e) {
   const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
   const q = p.matrixTransform(svg.getScreenCTM().inverse()); return { x: q.x, y: q.y };
 }
+function textAngle(i) { let a = Math.atan2(wallSeg(i).uy, wallSeg(i).ux) * 180 / Math.PI; if (a > 90.5) a -= 180; if (a <= -89.5) a += 180; return a; }
 
 /* ---------- SVG render ---------- */
 function pill(x, y, text, cls, fs) {
@@ -454,107 +546,110 @@ function pill(x, y, text, cls, fs) {
   return `<rect class="pill ${cls}" x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="${h / 2}"/><text class="pilltext" x="${x}" y="${y}" font-size="${fs}" text-anchor="middle" dominant-baseline="central">${esc(text)}</text>`;
 }
 function dimLine(x1, y1, x2, y2, label, cls, fs, tick) {
-  const horiz = Math.abs(y2 - y1) < Math.abs(x2 - x1);
-  const t = horiz ? `M${x1},${y1 - tick}v${tick * 2}M${x2},${y2 - tick}v${tick * 2}` : `M${x1 - tick},${y1}h${tick * 2}M${x2 - tick},${y2}h${tick * 2}`;
+  const L = Math.hypot(x2 - x1, y2 - y1) || 1, nx = -(y2 - y1) / L * tick, ny = (x2 - x1) / L * tick;
+  const t = `M${x1 - nx},${y1 - ny}L${x1 + nx},${y1 + ny}M${x2 - nx},${y2 - ny}L${x2 + nx},${y2 + ny}`;
   return `<line class="gl ${cls}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><path class="gl ${cls}" d="${t}"/>` + pill((x1 + x2) / 2, (y1 + y2) / 2, label, cls, fs);
 }
+// Distance from an item edge to the nearest wall in one direction, over the span [s0, s1].
+function wallCast(edge, sign, s0, s1, along) {
+  const perp = 1 - along, p = pts(); let best = Infinity, pos = null;
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length], ap = a[perp], bp = b[perp];
+    if (Math.abs(bp - ap) < 1e-9) continue;
+    const t0 = (s0 - ap) / (bp - ap), t1 = (s1 - ap) / (bp - ap), tl = Math.max(0, Math.min(t0, t1)), th = Math.min(1, Math.max(t0, t1));
+    if ((th - tl) * Math.abs(bp - ap) < 0.05) continue;
+    const A = [a[0] + tl * (b[0] - a[0]), a[1] + tl * (b[1] - a[1])], B = [a[0] + th * (b[0] - a[0]), a[1] + th * (b[1] - a[1])];
+    const pick = sign > 0 ? (A[along] <= B[along] ? A : B) : (A[along] >= B[along] ? A : B), far = pick === A ? B : A;
+    let dist = (pick[along] - edge) * sign;
+    if (dist < -0.05) { if ((far[along] - edge) * sign < -0.05) continue; dist = 0; }
+    if (dist < best) { best = dist; pos = Math.abs(A[along] - B[along]) < 1e-6 ? (A[perp] + B[perp]) / 2 : pick[perp]; }
+  }
+  return [best, pos];
+}
 function gapsFor(it) {
-  const a = bbox(it), W = S.room.w, H = S.room.h;
-  const others = S.items.filter(o => o !== it && o.kind !== 'rug').map(bbox);
-  const out = [];
-  const dirs = [
-    { ax: 'x', sign: 1 }, { ax: 'x', sign: -1 }, { ax: 'y', sign: 1 }, { ax: 'y', sign: -1 }];
-  for (const d of dirs) {
-    const horiz = d.ax === 'x';
-    const edge = horiz ? (d.sign > 0 ? a.x + a.w : a.x) : (d.sign > 0 ? a.y + a.h : a.y);
+  const a = bbox(it), others = S.items.filter(o => o !== it && o.kind !== 'rug').map(bbox), out = [];
+  for (const [ax, sign] of [['x', 1], ['x', -1], ['y', 1], ['y', -1]]) {
+    const horiz = ax === 'x', along = horiz ? 0 : 1;
+    const edge = horiz ? (sign > 0 ? a.x + a.w : a.x) : (sign > 0 ? a.y + a.h : a.y);
     const s0 = horiz ? a.y : a.x, s1 = horiz ? a.y + a.h : a.x + a.w;
-    let best = d.sign > 0 ? (horiz ? W : H) - edge : edge, pos = (s0 + s1) / 2;
+    let [best, pos] = wallCast(edge, sign, s0, s1, along);
+    if (pos == null) pos = (s0 + s1) / 2;
     for (const o of others) {
       const o0 = horiz ? o.y : o.x, o1 = horiz ? o.y + o.h : o.x + o.w;
       if (!(o0 < s1 - 0.05 && s0 < o1 - 0.05)) continue;
-      const near = horiz ? (d.sign > 0 ? o.x : o.x + o.w) : (d.sign > 0 ? o.y : o.y + o.h);
-      const dist = (near - edge) * d.sign;
+      const near = horiz ? (sign > 0 ? o.x : o.x + o.w) : (sign > 0 ? o.y : o.y + o.h);
+      const dist = (near - edge) * sign;
       if (dist > -0.05 && dist < best) { best = dist; pos = (Math.max(s0, o0) + Math.min(s1, o1)) / 2; }
     }
-    if (best < 0.75) continue;
-    const end = edge + best * d.sign;
+    if (!isFinite(best) || best < 0.75) continue;
+    const end = edge + best * sign;
     out.push(horiz ? [edge, pos, end, pos, best] : [pos, edge, pos, end, best]);
   }
   return out;
 }
 function renderSvg() {
-  const W = S.room.w, H = S.room.h, T = WALL;
-  const M = Math.max(36, Math.max(W, H) * 0.14);
+  const p = pts(), n = p.length, T = WALL, B = bounds();
+  const M = Math.max(40, Math.max(B.w, B.h) * 0.15);
   const r = svg.getBoundingClientRect();
-  const bw = (W + 2 * M) / view.z, bh = (H + 2 * M) / view.z;
-  if (view.cx == null) { view.cx = W / 2; view.cy = H / 2; }
+  const bw = (B.w + 2 * M) / view.z, bh = (B.h + 2 * M) / view.z;
+  if (view.cx == null) { view.cx = B.x + B.w / 2; view.cy = B.y + B.h / 2; }
   svg.setAttribute('viewBox', `${view.cx - bw / 2} ${view.cy - bh / 2} ${bw} ${bh}`);
   ppi = Math.min(r.width / bw, r.height / bh) || 1;
-  const px = n => n / ppi, fs = px(11.5);
-  const { bad } = lastAnalysis;
-  let h = `<defs><pattern id="hatch" width="${px(8)}" height="${px(8)}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hatchline" x1="0" y1="0" x2="0" y2="${px(8)}"/></pattern></defs>`;
+  const px = v => v / ppi, fs = px(11.5);
+  const { bad } = lastAnalysis, PA = ptsAttr(p);
+  let h = `<defs><pattern id="hatch" width="${px(8)}" height="${px(8)}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hatchline" x1="0" y1="0" x2="0" y2="${px(8)}"/></pattern><clipPath id="roomclip"><polygon points="${PA}"/></clipPath></defs>`;
 
-  // floor + grid
-  h += `<rect class="floor" x="0" y="0" width="${W}" height="${H}"/>`;
+  // walls (a thick stroke whose inner half is covered by the floor) + floor + grid
+  h += `<polygon class="wallpoly" points="${PA}" stroke-width="${2 * T}"/><polygon class="floor" points="${PA}"/>`;
   if (showGrid) {
     const step = metric() ? 50 / 2.54 : 12;
     let g = '';
-    for (let x = step; x < W - 0.01; x += step) g += `M${x},0V${H}`;
-    for (let y = step; y < H - 0.01; y += step) g += `M0,${y}H${W}`;
-    h += `<path class="grid" d="${g}"/>`;
+    for (let x = Math.ceil((B.x + 0.01) / step) * step; x < B.x + B.w - 0.01; x += step) g += `M${x},${B.y}V${B.y + B.h}`;
+    for (let y = Math.ceil((B.y + 0.01) / step) * step; y < B.y + B.h - 0.01; y += step) g += `M${B.x},${y}H${B.x + B.w}`;
+    h += `<path class="grid" clip-path="url(#roomclip)" d="${g}"/>`;
   }
-  // opening zones (under furniture)
+  // opening keep-clear zones (under furniture)
   for (const o of S.openings) {
     const z = zoneOf(o); if (!z) continue;
-    const cls = `op${sel && sel.type === 'op' && sel.id === o.id ? ' sel' : ''}`;
-    if (z.kind === 'rect') h += `<g class="${cls}" data-op="${o.id}"><rect class="zone" x="${z.rect.x}" y="${z.rect.y}" width="${z.rect.w}" height="${z.rect.h}"/></g>`;
-    else {
-      const hu = o.hinge === 'start' ? o.offset : o.offset + o.width, lu = o.hinge === 'start' ? o.offset + o.width : o.offset;
-      const dir = Math.sign(lu - hu); let pts = [toRoom(o.wall, hu, 0)];
-      for (let k = 0; k <= 24; k++) { const a = (k / 24) * Math.PI / 2; pts.push(toRoom(o.wall, hu + dir * o.width * Math.cos(a), o.width * Math.sin(a))); }
-      h += `<g class="${cls}" data-op="${o.id}"><path class="zone" d="M${pts.map(p => p.join(',')).join('L')}Z"/></g>`;
-    }
+    h += `<g class="op${sel && sel.type === 'op' && sel.id === o.id ? ' sel' : ''}" data-op="${o.id}"><polygon class="zone" points="${ptsAttr(z)}"/></g>`;
   }
-  // walls
-  h += `<path class="wall" fill-rule="evenodd" d="M${-T},${-T}h${W + 2 * T}v${H + 2 * T}h${-(W + 2 * T)}z M0,0v${H}h${W}v${-H}z"/>`;
+  // wall grab strips, selected wall highlight
+  for (let i = 0; i < n; i++) {
+    const [x1, y1] = toRoom(i, 0, -T / 2), [x2, y2] = toRoom(i, wallLen(i), -T / 2);
+    if (sel && sel.type === 'wall' && sel.i === i) h += `<line class="wallsel" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke-width="${T}"/>`;
+    h += `<line class="wallhit" data-wall="${i}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke-width="${Math.max(T, px(16))}"/>`;
+  }
   // openings
   for (const o of S.openings) {
-    const isSel = sel && sel.type === 'op' && sel.id === o.id;
-    const g = rectUV(o.wall, o.offset, o.offset + o.width, -T, 0);
+    const isSel = sel && sel.type === 'op' && sel.id === o.id, i = o.wall;
+    const g = quadUV(i, o.offset, o.offset + o.width, -T - 0.4, 0.4);
     let s = `<g class="op${isSel ? ' sel' : ''}" data-op="${o.id}">`;
     if (o.type === 'window') {
-      const [ax, ay] = toRoom(o.wall, o.offset, -T / 2), [bx, by] = toRoom(o.wall, o.offset + o.width, -T / 2);
-      s += `<rect class="glass" x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}"/><line class="glass" x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}"/>`;
+      const [ax, ay] = toRoom(i, o.offset, -T / 2), [bx, by] = toRoom(i, o.offset + o.width, -T / 2);
+      s += `<polygon class="glass" points="${ptsAttr(quadUV(i, o.offset, o.offset + o.width, -T, 0))}"/><line class="glass" x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}"/>`;
     } else {
-      s += `<rect class="gap" x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}"/>`;
+      s += `<polygon class="gap" points="${ptsAttr(g)}"/>`;
     }
     if (o.type === 'door') {
-      const hu = o.hinge === 'start' ? o.offset : o.offset + o.width, lu = o.hinge === 'start' ? o.offset + o.width : o.offset;
-      const dir = Math.sign(lu - hu), sv = o.swing === 'in' ? 1 : -1, base = o.swing === 'in' ? 0 : -T;
-      const hp = toRoom(o.wall, hu, base), tip = toRoom(o.wall, hu, base + sv * o.width);
-      let arc = [];
-      for (let k = 0; k <= 24; k++) { const a = (k / 24) * Math.PI / 2; arc.push(toRoom(o.wall, hu + dir * o.width * Math.cos(a), base + sv * o.width * Math.sin(a))); }
-      s += `<line class="leaf" x1="${hp[0]}" y1="${hp[1]}" x2="${tip[0]}" y2="${tip[1]}"/><path class="arc" d="M${arc.map(p => p.join(',')).join('L')}"/>`;
+      const sv = o.swing === 'in' ? 1 : -1, base = o.swing === 'in' ? 0 : -T, d = doorArc(o, base, sv, 24), tip = d.arc[d.arc.length - 1];
+      s += `<line class="leaf" x1="${d.hinge[0]}" y1="${d.hinge[1]}" x2="${tip[0]}" y2="${tip[1]}"/><path class="arc" d="M${d.arc.map(q => q.join(',')).join('L')}"/>`;
     }
     if (o.type === 'closet') {
-      const pts = []; const n = Math.max(2, Math.round(o.width / 12)) * 2;
-      for (let k = 0; k <= n; k++) pts.push(toRoom(o.wall, o.offset + o.width * k / n, k % 2 ? -T * 0.15 : -T * 0.85));
-      s += `<path class="arc" d="M${pts.map(p => p.join(',')).join('L')}"/>`;
+      const zz = [], k = Math.max(2, Math.round(o.width / 12)) * 2;
+      for (let j = 0; j <= k; j++) zz.push(toRoom(i, o.offset + o.width * j / k, j % 2 ? -T * 0.15 : -T * 0.85));
+      s += `<path class="arc" d="M${zz.map(q => q.join(',')).join('L')}"/>`;
     }
-    // label outside wall
-    const [lx, ly] = toRoom(o.wall, o.offset + o.width / 2, -T - px(9));
-    const rot = (o.wall === 'left' || o.wall === 'right') ? ` transform="rotate(${o.wall === 'left' ? -90 : 90} ${lx} ${ly})"` : '';
-    s += `<text class="oplabel" x="${lx}" y="${ly}" font-size="${px(10)}" text-anchor="middle" dominant-baseline="central"${rot}>${esc(opName(o))} · ${esc(fmt(o.width, 'in'))}</text>`;
-    // wide invisible hit target along wall
-    const hit = rectUV(o.wall, o.offset, o.offset + o.width, -T - px(6), px(6));
-    s += `<rect x="${hit.x}" y="${hit.y}" width="${hit.w}" height="${hit.h}" fill="transparent"/></g>`;
+    const [lx, ly] = toRoom(i, o.offset + o.width / 2, -T - px(9));
+    s += `<text class="oplabel" x="${lx}" y="${ly}" font-size="${px(10)}" text-anchor="middle" dominant-baseline="central" transform="rotate(${textAngle(i)} ${lx} ${ly})">${esc(opName(o))} · ${esc(fmt(o.width, 'in'))}</text>`;
+    s += `<polygon points="${ptsAttr(quadUV(i, o.offset, o.offset + o.width, -T - px(6), px(6)))}" fill="transparent"/></g>`;
     h += s;
   }
-  // room dimensions
-  const dOff = T + px(26), tk = px(4);
-  h += `<path class="dimline" d="M0,${-dOff}H${W}M0,${-dOff - tk}v${tk * 2}M${W},${-dOff - tk}v${tk * 2}M${-dOff},0V${H}M${-dOff - tk},0h${tk * 2}M${-dOff - tk},${H}h${tk * 2}"/>`;
-  h += `<text class="dimtext" x="${W / 2}" y="${-dOff - px(8)}" font-size="${px(12)}" text-anchor="middle">${esc(fmt(W, 'ft'))}</text>`;
-  h += `<text class="dimtext" x="${-dOff - px(8)}" y="${H / 2}" font-size="${px(12)}" text-anchor="middle" transform="rotate(-90 ${-dOff - px(8)} ${H / 2})">${esc(fmt(H, 'ft'))}</text>`;
+  // wall labels
+  for (let i = 0; i < n; i++) {
+    const L = wallLen(i); if (L * ppi < 12) continue;
+    const [lx, ly] = toRoom(i, L / 2, -T - px(L * ppi < 80 ? 12 : 25)), isSel = sel && sel.type === 'wall' && sel.i === i;
+    h += `<text class="wlabel${isSel ? ' sel' : ''}" x="${lx}" y="${ly}" font-size="${px(11.5)}" text-anchor="middle" dominant-baseline="central" transform="rotate(${textAngle(i)} ${lx} ${ly})"><tspan class="wletter">${letter(i)}</tspan>${L * ppi < 80 ? '' : '  ' + esc(fmt(L, 'ft'))}</text>`;
+  }
 
   // furniture: rugs first
   const order = [...S.items].sort((a, b) => (a.kind === 'rug' ? 0 : 1) - (b.kind === 'rug' ? 0 : 1));
@@ -566,24 +661,22 @@ function renderSvg() {
     s += `<rect class="body" x="${-w / 2}" y="${-d / 2}" width="${w}" height="${d}" rx="${Math.min(1.5, w / 10)}"/>`;
     if (bad.has(it.id)) s += `<rect class="hatch" x="${-w / 2}" y="${-d / 2}" width="${w}" height="${d}"/>`;
     if (it.kind === 'bed') {
-      const hb = Math.min(3, d * 0.06), n = w >= 48 ? 2 : 1, gp = 3, pw = (w - 8 - gp * (n - 1)) / n, ph = Math.min(13, d * 0.17);
+      const hb = Math.min(3, d * 0.06), nP = w >= 48 ? 2 : 1, gp = 3, pw = (w - 8 - gp * (nP - 1)) / nP, ph = Math.min(13, d * 0.17);
       s += `<rect class="band" x="${-w / 2}" y="${-d / 2}" width="${w}" height="${hb}"/>`;
-      for (let k = 0; k < n; k++) s += `<rect class="pillow" x="${-w / 2 + 4 + k * (pw + gp)}" y="${-d / 2 + hb + 3}" width="${pw}" height="${ph}" rx="${Math.min(4, ph / 3)}"/>`;
+      for (let k = 0; k < nP; k++) s += `<rect class="pillow" x="${-w / 2 + 4 + k * (pw + gp)}" y="${-d / 2 + hb + 3}" width="${pw}" height="${ph}" rx="${Math.min(4, ph / 3)}"/>`;
       s += `<path class="deco" d="M${-w / 2},${-d / 2 + d * 0.34}H${w / 2}"/>`;
     } else if (it.kind === 'rug') {
       s += `<rect class="deco" x="${-w / 2 + 3}" y="${-d / 2 + 3}" width="${Math.max(0, w - 6)}" height="${Math.max(0, d - 6)}"/>`;
     } else if (it.kind === 'seat') {
-      const bd = Math.min(6, d * 0.22);
-      s += `<rect class="band" x="${-w / 2}" y="${-d / 2}" width="${w}" height="${bd}"/>`;
+      s += `<rect class="band" x="${-w / 2}" y="${-d / 2}" width="${w}" height="${Math.min(6, d * 0.22)}"/>`;
     } else if (it.kind !== 'fixed') {
       s += `<rect class="band" x="${-w / 2}" y="${-d / 2}" width="${w}" height="${Math.min(2, d * 0.12)}"/>`;
     }
     s += `</g>`;
     if (isSel) s += `<rect class="selring" x="${b.x - px(4)}" y="${b.y - px(4)}" width="${b.w + px(8)}" height="${b.h + px(8)}" rx="${px(3)}"/>`;
-    // label
     const maxChars = Math.floor((b.w - px(6)) / (fs * 0.6));
     if (maxChars >= 3 && b.h > fs * 1.4) {
-      let nm = it.name.length > maxChars ? it.name.slice(0, Math.max(1, maxChars - 1)) + '…' : it.name;
+      const nm = it.name.length > maxChars ? it.name.slice(0, Math.max(1, maxChars - 1)) + '…' : it.name;
       const dims = `${fmt(it.w, 'in')} × ${fmt(it.d, 'in')}`;
       const two = b.h > fs * 3 && dims.length <= Math.floor(b.w / (fs * 0.55));
       const ty = it.kind === 'bed' && it.rot === 0 ? cy + d * 0.1 : cy;
@@ -593,7 +686,12 @@ function renderSvg() {
     s += `</g>`;
     h += s;
   }
-  // clearances around selected
+  // corner handles
+  for (let i = 0; i < n; i++) {
+    const isSel = sel && sel.type === 'corner' && sel.i === i;
+    h += `<circle class="corner${isSel ? ' sel' : ''}" data-corner="${i}" cx="${p[i][0]}" cy="${p[i][1]}" r="${px(isSel ? 7 : 5.5)}"/>`;
+  }
+  // clearances around the selected piece
   const si = sel && sel.type === 'item' ? findSel() : null;
   if (showGaps && si && si.kind !== 'rug') {
     const [lo, hi] = TH();
@@ -601,6 +699,12 @@ function renderSvg() {
       const cls = dist < lo ? 'bad' : dist < hi ? 'warn' : 'ok';
       h += dimLine(x1, y1, x2, y2, fmt(dist, 'auto'), cls, px(11), px(4));
     }
+  }
+  // where a selected door/window is measured from
+  const so = sel && sel.type === 'op' ? findSel() : null;
+  if (so && so.offset > 0.5) {
+    const [x1, y1] = toRoom(so.wall, 0, px(12)), [x2, y2] = toRoom(so.wall, so.offset, px(12));
+    h += dimLine(x1, y1, x2, y2, fmt(so.offset, 'auto'), 'acc', px(11), px(4));
   }
   // measurements
   const all = [...S.measures]; if (liveMeas) all.push(liveMeas);
@@ -619,29 +723,42 @@ function renderSvg() {
 
 /* ---------- side panel ---------- */
 const lenInput = (id, bind, v, style, label) => `<label class="f">${label}<input id="${id}" type="text" inputmode="decimal" data-bind="${bind}" value="${esc(fmt(v, style))}"></label>`;
+const nextWall = i => letter((i + 1) % pts().length);
 function inspectorHTML() {
   const t = findSel(); if (!t) return '';
   if (sel.type === 'item') {
-    const b = bbox(t);
+    const b = bbox(t), B = bounds();
     return `<section class="card insp"><h2>Selected piece <button class="btn" data-act="desel">Done</button></h2>
       <label class="f">Name<input id="fi-name" type="text" class="name" data-bind="item:${t.id}:name" value="${esc(t.name)}"></label>
       <div class="row2">${lenInput('fi-w', `item:${t.id}:w`, t.w, 'in', 'Width')}${lenInput('fi-d', `item:${t.id}:d`, t.d, 'in', 'Depth')}</div>
-      <div class="row2">${lenInput('fi-x', `item:${t.id}:x`, b.x, 'auto', 'From left wall')}${lenInput('fi-y', `item:${t.id}:y`, b.y, 'auto', 'From top wall')}</div>
+      <div class="row2">${lenInput('fi-x', `item:${t.id}:x`, b.x - B.x, 'auto', 'From left edge of room')}${lenInput('fi-y', `item:${t.id}:y`, b.y - B.y, 'auto', 'From top edge of room')}</div>
       <label class="f">Type<select id="fi-kind" data-bind="item:${t.id}:kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}"${k === t.kind ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
       <div class="btns"><button class="btn" data-act="rotate">Rotate 90°</button><button class="btn" data-act="dup">Duplicate</button><button class="btn" data-act="lock">${t.locked ? 'Unlock' : 'Lock in place'}</button><button class="btn danger" data-act="del">Delete</button></div>
       <p class="note">Width runs along the back (headboard side, shown as the darker edge). Depth comes out from the wall.</p></section>`;
   }
   if (sel.type === 'op') {
-    const ends = (t.wall === 'top' || t.wall === 'bottom') ? ['left', 'right'] : ['top', 'bottom'];
     return `<section class="card insp"><h2>${esc(opName(t))} <button class="btn" data-act="desel">Done</button></h2>
       <div class="row2"><label class="f">Type<select id="fo-type" data-bind="op:${t.id}:type">${Object.entries(OP_LABEL).map(([k, v]) => `<option value="${k}"${k === t.type ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
-      <label class="f">Wall<select id="fo-wall" data-bind="op:${t.id}:wall">${Object.entries(WALL_LABEL).map(([k, v]) => `<option value="${k}"${k === t.wall ? ' selected' : ''}>${v}</option>`).join('')}</select></label></div>
-      <div class="row2">${lenInput('fo-width', `op:${t.id}:width`, t.width, 'in', 'Width')}${lenInput('fo-offset', `op:${t.id}:offset`, t.offset, 'auto', `From ${ends[0]} corner`)}</div>
+      <label class="f">On wall<select id="fo-wall" data-bind="op:${t.id}:wall">${pts().map((_, i) => `<option value="${i}"${i === t.wall ? ' selected' : ''}>Wall ${letter(i)} · ${esc(fmt(wallLen(i), 'ft'))}</option>`).join('')}</select></label></div>
+      <div class="row2">${lenInput('fo-width', `op:${t.id}:width`, t.width, 'in', 'Width')}${lenInput('fo-offset', `op:${t.id}:offset`, t.offset, 'auto', 'Distance from corner')}</div>
       ${t.type === 'door' ? `<div class="row2"><label class="f">Swings<select id="fo-swing" data-bind="op:${t.id}:swing"><option value="in"${t.swing === 'in' ? ' selected' : ''}>Into room</option><option value="out"${t.swing === 'out' ? ' selected' : ''}>Out of room</option></select></label>
-        <label class="f">Hinges on<select id="fo-hinge" data-bind="op:${t.id}:hinge"><option value="start"${t.hinge === 'start' ? ' selected' : ''}>${ends[0]} side</option><option value="end"${t.hinge === 'end' ? ' selected' : ''}>${ends[1]} side</option></select></label></div>`
+        <label class="f">Hinges on<select id="fo-hinge" data-bind="op:${t.id}:hinge"><option value="start"${t.hinge === 'start' ? ' selected' : ''}>Side nearer that corner</option><option value="end"${t.hinge === 'end' ? ' selected' : ''}>Far side</option></select></label></div>`
         : lenInput('fo-clear', `op:${t.id}:clear`, t.clear || 0, 'in', t.type === 'window' ? 'Keep clear in front (0 = furniture can go under it)' : 'Keep clear in front')}
       <div class="btns"><button class="btn danger" data-act="del">Delete</button></div>
-      <p class="note">${t.type === 'door' ? 'The shaded arc is where the door swings. Furniture in it turns red.' : 'You can also drag it along the wall on the plan.'}</p></section>`;
+      <p class="note">The blue line on the plan shows which corner the distance is measured from. You can also drag it along the wall.${t.type === 'door' ? ' Furniture in the shaded swing turns red.' : ''}</p></section>`;
+  }
+  if (sel.type === 'wall') {
+    const i = t.i;
+    return `<section class="card insp"><h2>Wall ${letter(i)} <button class="btn" data-act="desel">Done</button></h2>
+      ${lenInput('fw-sel', `wall:${i}:len`, wallLen(i), 'ft', `Length <span class="sub">changing it moves wall ${nextWall(i)}</span>`)}
+      <div class="btns"><button class="btn" data-act="bump" data-dir="out">Add bump-out</button><button class="btn" data-act="bump" data-dir="in">Add notch</button><button class="btn" data-act="split">Add corner</button></div>
+      <p class="note">Drag the wall on the plan to push it in or out. A bump-out or notch adds a 2' recess you can then drag to size. "Add corner" puts a dot in the middle of the wall. Drag the dot to angle the wall.</p></section>`;
+  }
+  if (sel.type === 'corner') {
+    const n = pts().length;
+    return `<section class="card insp"><h2>Corner <button class="btn" data-act="desel">Done</button></h2>
+      <p class="note">Where wall ${letter((t.i - 1 + n) % n)} meets wall ${letter(t.i)}. Drag the dot to move it. It snaps in line with the corners next to it.</p>
+      <div class="btns"><button class="btn danger" data-act="del"${n <= 3 ? ' disabled' : ''}>Remove corner</button></div></section>`;
   }
   if (sel.type === 'meas') {
     return `<section class="card insp"><h2>Measurement <button class="btn" data-act="desel">Done</button></h2>
@@ -650,22 +767,31 @@ function inspectorHTML() {
   }
   return '';
 }
+function shapeThumb(sh) {
+  const p = sh.make(60, 44); let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of p) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  return `<svg viewBox="${x0 - 4} ${y0 - 4} ${x1 - x0 + 8} ${y1 - y0 + 8}" aria-hidden="true"><polygon points="${ptsAttr(p)}"/></svg>`;
+}
 function renderSide() {
-  const W = S.room.w, H = S.room.h, { issues, bad } = lastAnalysis;
-  const area = metric() ? (W * H * 6.4516 / 10000).toFixed(1) + ' m²' : Math.round(W * H / 144) + ' ft²';
+  const B = bounds(), { issues, bad } = lastAnalysis, p = pts();
+  const A = Math.abs(signedArea(p));
+  const area = metric() ? (A * 6.4516 / 10000).toFixed(1) + ' m²' : Math.round(A / 144) + ' ft²';
   const used = S.items.filter(i => i.kind !== 'rug').reduce((a, i) => a + i.w * i.d, 0);
-  const pctOpen = Math.max(0, Math.round(100 - used / (W * H) * 100));
+  const pctOpen = Math.max(0, Math.round(100 - used / A * 100));
   const [lo, hi] = TH();
   let h = inspectorHTML();
   h += `<section class="card"><h2>Room ${S.example ? '<span class="example-tag">Example — edit to make it yours</span>' : ''}</h2>
     <label class="f">Layout name<input id="fr-name" type="text" class="name" data-bind="room:_:name" value="${esc(S.name)}"></label>
-    <div class="row2">${lenInput('fr-w', 'room:_:w', W, 'ft', 'Width (left to right)')}${lenInput('fr-h', 'room:_:h', H, 'ft', 'Length (top to bottom)')}</div>
-    <p class="note">Type sizes any way you like: <code>12' 6"</code>, <code>150</code>, <code>3.8m</code>. Plain numbers are ${metric() ? 'centimetres' : 'inches'}.</p></section>`;
+    <div class="f-lab">Start from a shape</div>
+    <div class="shapes">${SHAPES.map((s, k) => `<button class="shape" data-act="shape" data-k="${k}">${shapeThumb(s)}<span>${s.name}</span></button>`).join('')}</div>
+    <div class="f-lab">Walls, going clockwise <span class="sub">${esc(fmt(B.w, 'ft'))} × ${esc(fmt(B.h, 'ft'))} overall</span></div>
+    <div class="walls">${p.map((_, i) => `<div class="wrow${sel && sel.type === 'wall' && sel.i === i ? ' on' : ''}"><button class="wl" data-act="sel-wall" data-i="${i}" title="Select wall ${letter(i)}">${letter(i)}</button><span class="wd" title="Direction on the plan">${wallDir(i)}</span><input id="fw-${i}" type="text" inputmode="decimal" aria-label="Wall ${letter(i)} length" data-bind="wall:${i}:len" value="${esc(fmt(wallLen(i), 'ft'))}"></div>`).join('')}</div>
+    <p class="note">Changing a wall's length moves the next wall along. You can also drag walls and corner dots on the plan, or select a wall to add a bump-out, notch or angled corner. Sizes can be typed as <code>12' 6"</code>, <code>150</code> or <code>3.8m</code>. Plain numbers are ${metric() ? 'centimetres' : 'inches'}.</p></section>`;
   h += `<section class="card"><h2>Doors, windows &amp; closets <small>${S.openings.length}</small></h2>
     <div class="btns"><button class="btn" data-act="add-op" data-type="door">+ Door</button><button class="btn" data-act="add-op" data-type="window">+ Window</button><button class="btn" data-act="add-op" data-type="closet">+ Closet</button><button class="btn" data-act="add-op" data-type="opening">+ Doorway</button></div>
-    ${S.openings.length ? `<div class="list">${S.openings.map(o => `<button data-act="sel-op" data-id="${o.id}" class="${sel && sel.id === o.id ? 'on' : ''}"><span class="nm">${esc(opName(o))}</span><span class="dim">${esc(WALL_LABEL[o.wall].replace(' wall', ''))} · ${esc(fmt(o.width, 'in'))}</span></button>`).join('')}</div>` : ''}</section>`;
-  h += `<section class="card"><h2>Add furniture</h2><div class="presets">${PRESETS.map((g, gi) => `<div class="grp">${g.g}</div><div class="chips">${g.items.map((p, pi) => `<button class="chip" data-act="add-preset" data-g="${gi}" data-i="${pi}">${esc(p.label || p.name)}<span>${esc(fmt(p.w, 'in').replace(/ cm$/, ''))}×${esc(fmt(p.d, 'in'))}</span></button>`).join('')}</div>`).join('')}</div>
-    <div class="grp" style="font:500 11px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Your own piece</div>
+    ${S.openings.length ? `<div class="list">${S.openings.map(o => `<button data-act="sel-op" data-id="${o.id}" class="${sel && sel.id === o.id ? 'on' : ''}"><span class="nm">${esc(opName(o))}</span><span class="dim">Wall ${letter(o.wall)} · ${esc(fmt(o.width, 'in'))}</span></button>`).join('')}</div>` : ''}</section>`;
+  h += `<section class="card"><h2>Add furniture</h2><div class="presets">${PRESETS.map((g, gi) => `<div class="grp">${g.g}</div><div class="chips">${g.items.map((pr, pi) => `<button class="chip" data-act="add-preset" data-g="${gi}" data-i="${pi}">${esc(pr.label || pr.name)}<span>${esc(fmt(pr.w, 'in').replace(/ cm$/, ''))}×${esc(fmt(pr.d, 'in'))}</span></button>`).join('')}</div>`).join('')}</div>
+    <div class="grp">Your own piece</div>
     <label class="f">Name<input id="fc-name" type="text" class="name" placeholder="e.g. Grandma's chest"></label>
     <div class="row3"><label class="f">Width<input id="fc-w" type="text" inputmode="decimal" placeholder="${metric() ? '90' : '36'}"></label><label class="f">Depth<input id="fc-d" type="text" inputmode="decimal" placeholder="${metric() ? '45' : '18'}"></label><button class="btn primary" data-act="add-custom">Add</button></div>
     ${S.items.length ? `<div class="list">${S.items.map(i => `<button data-act="sel-item" data-id="${i.id}" class="${sel && sel.id === i.id ? 'on' : ''}"><span class="dot" style="background:var(--k-${i.kind})"></span><span class="nm">${esc(i.name)}</span><span class="dim">${esc(fmt(i.w, 'in'))} × ${esc(fmt(i.d, 'in'))}</span>${bad.has(i.id) ? '<span class="flag" title="Has a problem"></span>' : ''}</button>`).join('')}</div>` : '<p class="note">Nothing placed yet. Tap a size above to drop it in the room.</p>'}</section>`;
@@ -686,13 +812,19 @@ function renderChrome() {
   if (t && sel.type === 'item') {
     sb.hidden = false;
     sb.innerHTML = `<span class="nm">${esc(t.name)}</span><button class="btn" data-act="rotate">Rotate</button><button class="btn" data-act="dup">Duplicate</button><button class="btn danger" data-act="del">Delete</button>`;
+  } else if (t && sel.type === 'wall') {
+    sb.hidden = false;
+    sb.innerHTML = `<span class="nm">Wall ${letter(t.i)} · ${esc(fmt(wallLen(t.i), 'ft'))}</span><button class="btn" data-act="bump" data-dir="out">Bump-out</button><button class="btn" data-act="bump" data-dir="in">Notch</button><button class="btn" data-act="split">Add corner</button>`;
+  } else if (t && sel.type === 'corner') {
+    sb.hidden = false;
+    sb.innerHTML = `<span class="nm">Corner</span><button class="btn danger" data-act="del"${pts().length <= 3 ? ' disabled' : ''}>Remove corner</button>`;
   } else if (t && (sel.type === 'meas' || sel.type === 'op')) {
     sb.hidden = false;
     sb.innerHTML = `<span class="nm">${sel.type === 'op' ? esc(opName(t)) : 'Measurement'}</span><button class="btn danger" data-act="del">Delete</button>`;
   } else sb.hidden = true;
   document.getElementById('hint').textContent = tool === 'measure'
     ? 'Drag between any two points. Ends snap to walls and furniture edges.'
-    : 'Drag pieces to move them. Arrow keys nudge, R rotates. Drag empty space to pan.';
+    : 'Drag furniture to move it, or drag walls and corner dots to reshape the room. Arrow keys nudge, R rotates.';
   const [lo, hi] = TH();
   document.getElementById('legend').innerHTML = showGaps ? `<span><i style="background:var(--bad)"></i>&lt;${esc(fmt(lo, 'in'))}</span><span><i style="background:var(--warn)"></i>${esc(fmt(lo, 'in'))}–${esc(fmt(hi, 'in'))}</span><span><i style="background:var(--ok)"></i>${esc(fmt(hi, 'in'))}+</span>` : '';
   document.getElementById('clearMeas').hidden = !S.measures.length;
@@ -711,6 +843,7 @@ function renderChrome() {
 }
 let sideQueued = false;
 function render() {
+  if (sel && !findSel()) sel = null;
   lastAnalysis = analyze();
   renderSvg(); renderChrome();
   if (!sideQueued) { sideQueued = true; requestAnimationFrame(() => { sideQueued = false; renderSide(); }); }
@@ -718,45 +851,79 @@ function render() {
 
 /* ---------- actions ---------- */
 function freeSpot(w, d) {
-  const W = S.room.w, H = S.room.h, step = 6;
+  const B = bounds(), step = 6;
   const zones = S.openings.map(zoneOf).filter(Boolean);
   const solid = S.items.filter(i => i.kind !== 'rug').map(bbox);
-  const cands = [];
-  for (let y = 0; y + d <= H; y += step) for (let x = 0; x + w <= W; x += step) cands.push({ x, y });
-  cands.sort((a, b) => Math.hypot(a.x + w / 2 - W / 2, a.y + d / 2 - H / 2) - Math.hypot(b.x + w / 2 - W / 2, b.y + d / 2 - H / 2));
+  const cx = B.x + B.w / 2, cy = B.y + B.h / 2, cands = [];
+  for (let y = B.y; y + d <= B.y + B.h; y += step) for (let x = B.x; x + w <= B.x + B.w; x += step) cands.push({ x, y });
+  cands.sort((a, b) => Math.hypot(a.x + w / 2 - cx, a.y + d / 2 - cy) - Math.hypot(b.x + w / 2 - cx, b.y + d / 2 - cy));
   for (const c of cands) {
     const b = { x: c.x, y: c.y, w, h: d };
-    if (solid.some(o => overlap(b, o)) || zones.some(z => hitsZone(b, z))) continue;
+    if (!rectInRoom(b) || solid.some(o => overlap(b, o)) || zones.some(z => hitsZone(b, z))) continue;
     return c;
   }
-  return { x: Math.max(0, (W - w) / 2), y: Math.max(0, (H - d) / 2) };
+  return { x: r2(cx - w / 2), y: r2(cy - d / 2) };
 }
-function addItem(p) {
+function addItem(pr) {
   commit(() => {
-    const spot = p.kind === 'rug' ? { x: Math.max(0, (S.room.w - p.w) / 2), y: Math.max(0, (S.room.h - p.d) / 2) } : freeSpot(p.w, p.d);
-    const it = { id: uid(), name: p.name, w: p.w, d: p.d, x: spot.x, y: spot.y, rot: 0, kind: p.kind };
+    const B = bounds();
+    const spot = pr.kind === 'rug' ? { x: r2(B.x + Math.max(0, (B.w - pr.w) / 2)), y: r2(B.y + Math.max(0, (B.h - pr.d) / 2)) } : freeSpot(pr.w, pr.d);
+    const it = { id: uid(), name: pr.name, w: pr.w, d: pr.d, x: spot.x, y: spot.y, rot: 0, kind: pr.kind };
     S.items.push(it); sel = { type: 'item', id: it.id };
   });
 }
 function addOpening(type) {
   commit(() => {
-    const defs = { door: ['bottom', 32, 0], window: ['top', 48, 0], closet: ['right', 72, 24], opening: ['left', 36, 0] };
-    const [wall, width, clear] = defs[type];
-    const L = wallLen(wall), w = Math.min(width, L);
-    const o = { id: uid(), type, wall, width: w, offset: Math.max(0, (L - w) / 2), swing: 'in', hinge: 'start', clear };
+    const defs = { door: [32, 0], window: [48, 0], closet: [72, 24], opening: [36, 0] };
+    const [width, clear] = defs[type];
+    // put it on the longest wall that has the most free space
+    let best = 0, bl = -1;
+    pts().forEach((_, i) => { const free = wallLen(i) - S.openings.filter(o => o.wall === i).reduce((a, o) => a + o.width, 0); if (free > bl) { bl = free; best = i; } });
+    const L = wallLen(best), w = Math.min(width, L);
+    const o = { id: uid(), type, wall: best, width: w, offset: r2(Math.max(0, (L - w) / 2)), swing: 'in', hinge: 'start', clear };
     S.openings.push(o); sel = { type: 'op', id: o.id };
   });
 }
 function rotateSel() {
   const t = findSel(); if (!t || sel.type !== 'item') return;
-  commit(() => { const b = bbox(t), cx = b.x + b.w / 2, cy = b.y + b.h / 2; t.rot = (t.rot + 1) % 4; const nb = bbox(t); t.x = Math.round((cx - nb.w / 2) * 2) / 2; t.y = Math.round((cy - nb.h / 2) * 2) / 2; });
+  commit(() => { const b = bbox(t), cx = b.x + b.w / 2, cy = b.y + b.h / 2; t.rot = (t.rot + 1) % 4; const nb = bbox(t); t.x = r2(cx - nb.w / 2); t.y = r2(cy - nb.h / 2); });
 }
 function dupSel() {
   const t = findSel(); if (!t || sel.type !== 'item') return;
   commit(() => { const b = bbox(t); const sp = freeSpot(b.w, b.h); const c = { ...t, id: uid(), x: sp.x, y: sp.y, locked: false }; S.items.push(c); sel = { type: 'item', id: c.id }; });
 }
+function clampOp(o) {
+  const n = pts().length; if (!(o.wall >= 0 && o.wall < n)) o.wall = 0;
+  const L = wallLen(o.wall); o.offset = clamp(o.offset, 0, Math.max(0, L - o.width));
+}
+// Change the room's corners while keeping doors and windows where they are on the plan.
+function reshape(fn) {
+  const before = S.openings.map(o => { const w = wallSeg(o.wall); return { m: toRoom(o.wall, o.offset + o.width / 2, 0), ux: w.ux, uy: w.uy }; });
+  fn();
+  const p = pts();
+  S.openings.forEach((o, k) => {
+    const { m, ux, uy } = before[k]; let bi = 0, bd = Infinity, bu = 0;
+    for (let i = 0; i < p.length; i++) { const r = projSeg(m[0], m[1], p[i], p[(i + 1) % p.length]), fits = wallLen(i) >= o.width - 0.01; const d = r.d + (fits ? 0 : 1e6); if (d < bd - 1e-6) { bd = d; bi = i; bu = r.u; } }
+    const w = wallSeg(bi);
+    if (w.ux * ux + w.uy * uy < 0) o.hinge = o.hinge === 'start' ? 'end' : 'start';
+    o.wall = bi; o.offset = r2(bu - o.width / 2); clampOp(o);
+  });
+}
+function setWallLen(i, L) {
+  const p = pts(), n = p.length, w = wallSeg(i), dl = L - w.L;
+  for (const k of [(i + 1) % n, (i + 2) % n]) { if (k === i) continue; p[k] = [r2(p[k][0] + w.ux * dl), r2(p[k][1] + w.uy * dl)]; }
+  S.openings.forEach(clampOp);
+}
+function splitWall(i, us, vs) { // insert corners along wall i at distances us (with offsets vs into the room)
+  reshape(() => { const add = us.map((u, k) => toRoom(i, u, vs[k]).map(r2)); S.room.pts.splice(i + 1, 0, ...add); });
+}
 function delSel() {
   if (!sel) return;
+  if (sel.type === 'wall') return;
+  if (sel.type === 'corner') {
+    if (pts().length <= 3) return;
+    const k = sel.i; commit(() => { reshape(() => S.room.pts.splice(k, 1)); sel = null; }); return;
+  }
   commit(() => {
     if (sel.type === 'item') S.items = S.items.filter(i => i.id !== sel.id);
     if (sel.type === 'op') S.openings = S.openings.filter(i => i.id !== sel.id);
@@ -764,28 +931,27 @@ function delSel() {
     sel = null;
   });
 }
-function clampOp(o) { const L = wallLen(o.wall); o.width = clamp(o.width, 1, L); o.offset = clamp(o.offset, 0, L - o.width); }
 function handleField(el) {
   const [scope, id, key] = el.dataset.bind.split(':');
-  const lenKeys = ['w', 'h', 'd', 'x', 'y', 'width', 'offset', 'clear'];
+  const lenKeys = ['w', 'd', 'x', 'y', 'width', 'offset', 'clear', 'len'];
   let val = el.value;
   if (lenKeys.includes(key)) {
     val = parseLen(val);
     const min = (key === 'x' || key === 'y' || key === 'offset' || key === 'clear') ? 0 : 1;
-    if (!isFinite(val) || val < min || val > 1200) { el.classList.add('err'); el.title = 'Try something like 36, 3\' 0", or 90 cm'; return; }
+    if (!isFinite(val) || val < min || val > 2400) { el.classList.add('err'); el.title = 'Try something like 36, 3\' 0", or 90 cm'; return; }
     val = Math.round(val * 100) / 100;
   } else if (key === 'name') { val = val.trim() || (scope === 'room' ? 'Untitled' : 'Item'); }
   commit(() => {
-    if (scope === 'room') {
-      if (key === 'name') S.name = val; else S.room[key] = val;
-      S.openings.forEach(clampOp);
-    } else if (scope === 'item') {
+    if (scope === 'room') { S.name = val; }
+    else if (scope === 'wall') { setWallLen(+id, val); }
+    else if (scope === 'item') {
       const t = S.items.find(i => i.id === id); if (!t) return;
-      t[key] = val;
+      const B = bounds();
+      if (key === 'x') t.x = B.x + val; else if (key === 'y') t.y = B.y + val; else t[key] = val;
     } else if (scope === 'op') {
       const t = S.openings.find(o => o.id === id); if (!t) return;
-      t[key] = val;
-      if (key === 'type') { if (val === 'closet' && !t.clear) t.clear = 24; if (val !== 'closet' && val !== 'door') t.clear = t.clear || 0; }
+      t[key] = key === 'wall' ? +val : val;
+      if (key === 'type' && val === 'closet' && !t.clear) t.clear = 24;
       clampOp(t);
     }
   });
@@ -793,9 +959,9 @@ function handleField(el) {
 
 /* ---------- events: side & chrome ---------- */
 function onAct(e) {
-  const b = e.target.closest('[data-act]'); if (!b) return;
+  const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
   const a = b.dataset.act;
-  if (a === 'add-preset') { const p = PRESETS[+b.dataset.g].items[+b.dataset.i]; addItem(p); }
+  if (a === 'add-preset') addItem(PRESETS[+b.dataset.g].items[+b.dataset.i]);
   else if (a === 'add-custom') {
     const nm = document.getElementById('fc-name').value.trim() || 'Custom piece';
     const wEl = document.getElementById('fc-w'), dEl = document.getElementById('fc-d');
@@ -806,11 +972,26 @@ function onAct(e) {
   else if (a === 'add-op') addOpening(b.dataset.type);
   else if (a === 'sel-item') { sel = { type: 'item', id: b.dataset.id }; render(); }
   else if (a === 'sel-op') { sel = { type: 'op', id: b.dataset.id }; render(); }
+  else if (a === 'sel-wall') { sel = { type: 'wall', i: +b.dataset.i }; render(); }
   else if (a === 'desel') { sel = null; render(); }
   else if (a === 'rotate') rotateSel();
   else if (a === 'dup') dupSel();
   else if (a === 'del') delSel();
   else if (a === 'lock') { const t = findSel(); if (t) commit(() => { t.locked = !t.locked; }); }
+  else if (a === 'shape') {
+    const B = bounds(), sh = SHAPES[+b.dataset.k];
+    commit(() => { reshape(() => { S.room.pts = sh.make(r2(B.w), r2(B.h)).map(([x, y]) => [x + B.x, y + B.y]); }); sel = null; });
+    view = { z: 1, cx: null, cy: null }; render();
+  }
+  else if (a === 'split' && sel && sel.type === 'wall') {
+    const i = sel.i, L = wallLen(i);
+    commit(() => { splitWall(i, [r2(L / 2)], [0]); sel = { type: 'corner', i: i + 1 }; });
+  }
+  else if (a === 'bump' && sel && sel.type === 'wall') {
+    const i = sel.i, L = wallLen(i), d = Math.min(24, L / 3) * (b.dataset.dir === 'out' ? -1 : 1);
+    const u1 = r2(L / 3), u2 = r2(2 * L / 3);
+    commit(() => { splitWall(i, [u1, u1, u2, u2], [0, d, d, 0]); sel = { type: 'wall', i: i + 2 }; });
+  }
 }
 side.addEventListener('click', onAct);
 document.getElementById('selbar').addEventListener('click', onAct);
@@ -847,7 +1028,7 @@ on('delLayout', () => {
 });
 // backup
 const bk = document.getElementById('backup');
-on('backupBtn', () => { document.getElementById('bkOut').value = JSON.stringify({ app: 'bedroom-layout-planner', v: 1, layouts: store.layouts.map(l => l.data) }); document.getElementById('bkMsg').textContent = ''; bk.hidden = false; });
+on('backupBtn', () => { document.getElementById('bkOut').value = JSON.stringify({ app: 'bedroom-layout-planner', v: 2, layouts: store.layouts.map(l => l.data) }); document.getElementById('bkMsg').textContent = ''; bk.hidden = false; });
 on('bkClose', () => { bk.hidden = true; });
 bk.addEventListener('click', e => { if (e.target === bk) bk.hidden = true; });
 on('bkCopy', () => {
@@ -863,54 +1044,74 @@ on('bkLoad', () => {
     const ok = list.filter(l => l && l.room && Array.isArray(l.items));
     if (!ok.length) throw new Error();
     let last;
-    for (const l of ok) { l.openings = l.openings || []; l.measures = l.measures || []; last = uid(); store.layouts.push({ id: last, data: l }); }
+    for (const l of ok) { last = uid(); store.layouts.push({ id: last, data: migrate(l) }); }
     bk.hidden = true; document.getElementById('bkIn').value = ''; switchLayout(last);
   } catch (e) { msg.textContent = 'That code could not be read. Paste the whole code from "Copy code".'; }
 });
 
 /* ---------- canvas interaction ---------- */
+function pick(v, arr, tol) { let best = null, bd = tol; for (const c of arr) { const dd = Math.abs(c - v); if (dd < bd) { bd = dd; best = c; } } return best; }
 function snapItem(it, nx, ny) {
-  const b = bbox(it), W = S.room.w, H = S.room.h, tol = 10 / ppi;
+  const b = bbox(it), tol = 10 / ppi, p = pts();
   const grid = metric() ? 1 / 2.54 : 1;
-  if (!snapOn) return [Math.round(nx * 2) / 2, Math.round(ny * 2) / 2];
-  const xs = [0, W - b.w], ys = [0, H - b.h];
+  if (!snapOn) return [r2(nx), r2(ny)];
+  const xs = [], ys = [];
+  for (let i = 0; i < p.length; i++) { // straight walls
+    const a = p[i], c = p[(i + 1) % p.length];
+    if (Math.abs(a[0] - c[0]) < 1e-6) xs.push(a[0], a[0] - b.w);
+    if (Math.abs(a[1] - c[1]) < 1e-6) ys.push(a[1], a[1] - b.h);
+  }
   for (const o of S.items) {
     if (o === it) continue; const ob = bbox(o);
     xs.push(ob.x + ob.w, ob.x - b.w, ob.x, ob.x + ob.w - b.w);
     ys.push(ob.y + ob.h, ob.y - b.h, ob.y, ob.y + ob.h - b.h);
   }
-  const pick = (v, arr) => { let best = null, bd = tol; for (const c of arr) { const dd = Math.abs(c - v); if (dd < bd) { bd = dd; best = c; } } return best; };
-  const sx = pick(nx, xs), sy = pick(ny, ys);
+  const sx = pick(nx, xs, tol), sy = pick(ny, ys, tol);
   return [sx != null ? sx : Math.round(nx / grid) * grid, sy != null ? sy : Math.round(ny / grid) * grid];
 }
-function snapPoint(p) {
-  const W = S.room.w, H = S.room.h, tol = 10 / ppi;
-  const xs = [0, W], ys = [0, H];
+function snapPoint(q) {
+  if (!snapOn) return q;
+  const tol = 10 / ppi, p = pts(), xs = [], ys = [];
+  for (const [x, y] of p) { xs.push(x); ys.push(y); }
   for (const o of S.items) { const b = bbox(o); xs.push(b.x, b.x + b.w); ys.push(b.y, b.y + b.h); }
-  for (const o of S.openings) { const r = rectUV(o.wall, o.offset, o.offset + o.width, 0, 0); xs.push(r.x, r.x + r.w); ys.push(r.y, r.y + r.h); }
-  const pick = (v, arr) => { let best = v, bd = tol; for (const c of arr) { const dd = Math.abs(c - v); if (dd < bd) { bd = dd; best = c; } } return best; };
-  return snapOn ? { x: pick(p.x, xs), y: pick(p.y, ys) } : p;
+  for (const o of S.openings) for (const u of [o.offset, o.offset + o.width]) { const [x, y] = toRoom(o.wall, u, 0); xs.push(x); ys.push(y); }
+  const sx = pick(q.x, xs, tol), sy = pick(q.y, ys, tol);
+  const out = { x: sx != null ? sx : q.x, y: sy != null ? sy : q.y };
+  if (sx == null || sy == null) { // otherwise slide onto a nearby wall (handles angled walls)
+    let best = null;
+    for (let i = 0; i < p.length; i++) { const r = projSeg(out.x, out.y, p[i], p[(i + 1) % p.length]); if (r.d < tol && (!best || r.d < best.d)) best = r; }
+    if (best) { out.x = best.x; out.y = best.y; }
+  }
+  return out;
 }
 svg.addEventListener('pointerdown', e => {
   if (e.button !== 0 && e.pointerType === 'mouse') return;
-  const p = toPt(e);
+  const q = toPt(e);
   svg.setPointerCapture(e.pointerId);
   if (tool === 'measure') {
-    const sp = snapPoint(p);
+    const sp = snapPoint(q);
     drag = { type: 'measure', snapPt: sp };
     liveMeas = { x1: sp.x, y1: sp.y, x2: sp.x, y2: sp.y };
     render(); return;
   }
-  const itEl = e.target.closest('[data-item]'), opEl = e.target.closest('[data-op]'), msEl = e.target.closest('[data-meas]');
-  if (msEl && msEl.dataset.meas) { sel = { type: 'meas', id: msEl.dataset.meas }; drag = null; render(); return; }
-  if (itEl) {
+  const t = e.target;
+  const cEl = t.closest('[data-corner]'), itEl = t.closest('[data-item]'), opEl = t.closest('[data-op]'), msEl = t.closest('[data-meas]'), wEl = t.closest('[data-wall]');
+  const base = { sx: q.x, sy: q.y, before: snap(), moved: false };
+  if (cEl) {
+    const i = +cEl.dataset.corner; sel = { type: 'corner', i };
+    drag = { type: 'corner', i, o: [...pts()[i]], ...base };
+  } else if (msEl && msEl.dataset.meas) { sel = { type: 'meas', id: msEl.dataset.meas }; drag = null; }
+  else if (itEl) {
     const it = S.items.find(i => i.id === itEl.dataset.item);
     sel = { type: 'item', id: it.id };
-    drag = it.locked ? null : { type: 'item', it, sx: p.x, sy: p.y, ox: it.x, oy: it.y, before: snap(), moved: false };
+    drag = it.locked ? null : { type: 'item', it, ox: it.x, oy: it.y, ...base };
   } else if (opEl) {
     const o = S.openings.find(x => x.id === opEl.dataset.op);
     sel = { type: 'op', id: o.id };
-    drag = { type: 'op', o, sx: p.x, sy: p.y, ox: o.offset, before: snap(), moved: false };
+    drag = { type: 'op', o, ox: o.offset, ...base };
+  } else if (wEl) {
+    const i = +wEl.dataset.wall, n = pts().length; sel = { type: 'wall', i };
+    drag = { type: 'wall', i, a: [...pts()[i]], b: [...pts()[(i + 1) % n]], w: wallSeg(i), ...base };
   } else {
     sel = null;
     drag = { type: 'pan', cx0: e.clientX, cy0: e.clientY, vx: view.cx, vy: view.cy };
@@ -921,22 +1122,36 @@ svg.addEventListener('pointerdown', e => {
 svg.addEventListener('pointermove', e => {
   if (!drag) return;
   if (drag.type === 'pan') { view.cx = drag.vx - (e.clientX - drag.cx0) / ppi; view.cy = drag.vy - (e.clientY - drag.cy0) / ppi; renderSvg(); return; }
-  const p = toPt(e);
+  const q = toPt(e);
   if (drag.type === 'measure') {
-    let q = snapPoint(p);
-    const dx = q.x - liveMeas.x1, dy = q.y - liveMeas.y1;
-    if (Math.abs(dx) < Math.abs(dy) * 0.07) q.x = liveMeas.x1; else if (Math.abs(dy) < Math.abs(dx) * 0.07) q.y = liveMeas.y1;
-    liveMeas.x2 = q.x; liveMeas.y2 = q.y; drag.snapPt = q; renderSvg(); return;
+    const s = snapPoint(q);
+    const dx = s.x - liveMeas.x1, dy = s.y - liveMeas.y1;
+    if (Math.abs(dx) < Math.abs(dy) * 0.07) s.x = liveMeas.x1; else if (Math.abs(dy) < Math.abs(dx) * 0.07) s.y = liveMeas.y1;
+    liveMeas.x2 = s.x; liveMeas.y2 = s.y; drag.snapPt = s; renderSvg(); return;
   }
-  if (Math.hypot(p.x - drag.sx, p.y - drag.sy) * ppi > 3) drag.moved = true;
+  if (Math.hypot(q.x - drag.sx, q.y - drag.sy) * ppi > 3) drag.moved = true;
   if (!drag.moved) return;
+  const dx = q.x - drag.sx, dy = q.y - drag.sy, p = pts(), n = p.length;
   if (drag.type === 'item') {
-    const [nx, ny] = snapItem(drag.it, drag.ox + p.x - drag.sx, drag.oy + p.y - drag.sy);
+    const [nx, ny] = snapItem(drag.it, drag.ox + dx, drag.oy + dy);
     drag.it.x = nx; drag.it.y = ny;
   } else if (drag.type === 'op') {
-    const o = drag.o, horiz = o.wall === 'top' || o.wall === 'bottom';
-    const du = horiz ? p.x - drag.sx : p.y - drag.sy;
-    o.offset = clamp(Math.round((drag.ox + du) * 2) / 2, 0, wallLen(o.wall) - o.width);
+    const w = wallSeg(drag.o.wall);
+    drag.o.offset = clamp(r2(drag.ox + dx * w.ux + dy * w.uy), 0, Math.max(0, w.L - drag.o.width));
+  } else if (drag.type === 'wall') {
+    const w = drag.w, dn = r2(dx * w.nx + dy * w.ny);
+    p[drag.i] = [r2(drag.a[0] + w.nx * dn), r2(drag.a[1] + w.ny * dn)];
+    p[(drag.i + 1) % n] = [r2(drag.b[0] + w.nx * dn), r2(drag.b[1] + w.ny * dn)];
+    S.openings.forEach(clampOp);
+  } else if (drag.type === 'corner') {
+    let x = drag.o[0] + dx, y = drag.o[1] + dy;
+    if (snapOn) {
+      const nb = [p[(drag.i - 1 + n) % n], p[(drag.i + 1) % n]], tol = 10 / ppi;
+      const sx = pick(x, nb.map(v => v[0]), tol), sy = pick(y, nb.map(v => v[1]), tol);
+      x = sx != null ? sx : x; y = sy != null ? sy : y;
+    }
+    p[drag.i] = [r2(x), r2(y)];
+    S.openings.forEach(clampOp);
   }
   lastAnalysis = analyze(); renderSvg(); renderChrome();
 });
@@ -948,15 +1163,15 @@ function endDrag() {
     if (m && Math.hypot(m.x2 - m.x1, m.y2 - m.y1) > 1) commit(() => { const nm = { id: uid(), ...m }; S.measures.push(nm); sel = { type: 'meas', id: nm.id }; });
     drag = null; render(); return;
   }
-  if ((drag.type === 'item' || drag.type === 'op') && drag.moved && snap() !== drag.before) { pushUndo(drag.before); if (S.example) S.example = false; save(); }
+  if (drag.type !== 'pan' && drag.moved && snap() !== drag.before) { pushUndo(drag.before); if (S.example) S.example = false; save(); }
   drag = null; render();
 }
 svg.addEventListener('pointerup', endDrag);
 svg.addEventListener('pointercancel', endDrag);
 svg.addEventListener('wheel', e => {
   e.preventDefault();
-  const p = toPt(e), f = Math.exp(-e.deltaY * 0.0015), nz = clamp(view.z * f, 0.4, 8), k = view.z / nz;
-  view.cx = p.x + (view.cx - p.x) * k; view.cy = p.y + (view.cy - p.y) * k; view.z = nz; renderSvg();
+  const q = toPt(e), f = Math.exp(-e.deltaY * 0.0015), nz = clamp(view.z * f, 0.4, 8), k = view.z / nz;
+  view.cx = q.x + (view.cx - q.x) * k; view.cy = q.y + (view.cy - q.y) * k; view.z = nz; renderSvg();
 }, { passive: false });
 
 document.addEventListener('keydown', e => {
