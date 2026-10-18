@@ -226,6 +226,7 @@ label.f input.err { border-color: var(--bad); background: var(--bad-soft); }
 #plan .pill.acc { fill: var(--accent); }
 #plan .pill.acc + .pilltext { fill: var(--on-accent); }
 #plan .snapdot { fill: var(--accent); }
+#plan .trim { fill: var(--k-stroke); }
 
 /* Backup panel */
 .overlay { position: fixed; inset: 0; background: rgba(10, 18, 16, .45); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 20; }
@@ -305,6 +306,7 @@ label.f input.err { border-color: var(--bad); background: var(--bad-soft); }
 (() => {
 'use strict';
 const WALL = 5; // drawn wall thickness, inches
+const TRIM_DEFAULT = 3, TRIM_DEPTH = 0.75; // door casing: width each side, how far it stands off the wall
 const KINDS = { bed: 'Bed', storage: 'Storage', seat: 'Seating', table: 'Table / desk', rug: 'Rug (can go under things)', fixed: 'Built-in / obstacle' };
 const PRESETS = [
   { g: 'Beds', items: [['Twin', 38, 75], ['Twin XL', 38, 80], ['Full', 54, 75], ['Queen', 60, 80], ['King', 76, 80], ['Cal King', 72, 84]].map(([n, w, d]) => ({ name: n + ' bed', label: n, w, d, kind: 'bed' })) },
@@ -341,9 +343,9 @@ function exampleLayout() {
     name: 'Example bedroom', example: true,
     room: { pts: [[0, 0], [144, 0], [144, 168], [0, 168]] },
     openings: [
-      { id: uid(), type: 'door', wall: 2, offset: 8, width: 32, swing: 'in', hinge: 'start', clear: 0 },
-      { id: uid(), type: 'closet', wall: 1, offset: 30, width: 60, swing: 'in', hinge: 'start', clear: 24 },
-      { id: uid(), type: 'window', wall: 3, offset: 60, width: 48, swing: 'in', hinge: 'start', clear: 0 },
+      { id: uid(), type: 'door', wall: 2, offset: 8, width: 32, swing: 'in', hinge: 'start', clear: 0, trim: 3 },
+      { id: uid(), type: 'closet', wall: 1, offset: 30, width: 60, swing: 'in', hinge: 'start', clear: 24, trim: 3 },
+      { id: uid(), type: 'window', wall: 3, offset: 60, width: 48, swing: 'in', hinge: 'start', clear: 0, trim: 0 },
     ],
     items: [
       { id: uid(), name: 'Queen bed', w: 60, d: 80, x: 42, y: 0, rot: 0, kind: 'bed' },
@@ -356,11 +358,12 @@ function exampleLayout() {
   };
 }
 function blankLayout(n) {
-  return { name: 'Room ' + n, room: { pts: [[0, 0], [144, 0], [144, 144], [0, 144]] }, openings: [{ id: uid(), type: 'door', wall: 2, offset: 12, width: 32, swing: 'in', hinge: 'start', clear: 0 }], items: [], measures: [] };
+  return { name: 'Room ' + n, room: { pts: [[0, 0], [144, 0], [144, 144], [0, 144]] }, openings: [{ id: uid(), type: 'door', wall: 2, offset: 12, width: 32, swing: 'in', hinge: 'start', clear: 0, trim: 3 }], items: [], measures: [] };
 }
 // Older saves stored a rectangle as {w, h} with walls named top/right/bottom/left.
 function migrate(d) {
   d.openings = d.openings || []; d.items = d.items || []; d.measures = d.measures || [];
+  for (const o of d.openings) if (o.trim == null) o.trim = o.type === 'window' ? 0 : TRIM_DEFAULT;
   if (d.room && Array.isArray(d.room.pts)) return d;
   const W = (d.room && d.room.w) || 144, H = (d.room && d.room.h) || 144;
   d.room = { pts: [[0, 0], [W, 0], [W, H], [0, H]] };
@@ -490,6 +493,16 @@ function zoneOf(o) {
   if (o.clear > 0) return quadUV(o.wall, o.offset, o.offset + o.width, 0, o.clear);
   return null;
 }
+// Strips of casing on each side of an opening, clipped to its wall.
+function trimZones(o) {
+  if (!(o.trim > 0)) return [];
+  const L = wallLen(o.wall), out = [];
+  const a0 = Math.max(0, o.offset - o.trim), b1 = Math.min(L, o.offset + o.width + o.trim);
+  if (o.offset - a0 > 0.01) out.push([a0, o.offset]);
+  if (b1 - (o.offset + o.width) > 0.01) out.push([o.offset + o.width, b1]);
+  return out;
+}
+const trimPolys = (o, depth = TRIM_DEPTH) => trimZones(o).map(([u0, u1]) => quadUV(o.wall, u0, u1, 0, depth));
 const hitsZone = (b, z) => polyHitsRect(z, { x: b.x + 0.05, y: b.y + 0.05, w: b.w - 0.1, h: b.h - 0.1 });
 function opName(o) {
   const same = S.openings.filter(x => x.type === o.type);
@@ -507,6 +520,11 @@ function analyze() {
     if (overlap(bbox(solid[i]), bbox(solid[j]))) { bad.add(solid[i].id); bad.add(solid[j].id); issues.push({ id: solid[i].id, msg: `${solid[i].name} overlaps ${solid[j].name}` }); }
   }
   for (const o of S.openings) {
+    const tp = trimPolys(o);
+    for (const it of solid) {
+      if (it.kind === 'fixed') continue;
+      if (tp.some(z => hitsZone(bbox(it), z))) { bad.add(it.id); issues.push({ id: it.id, msg: `${it.name} hits the trim around ${opName(o)}` }); }
+    }
     const z = zoneOf(o); if (!z) continue;
     for (const it of solid) {
       if (it.kind === 'fixed') continue;
@@ -639,6 +657,7 @@ function renderSvg() {
       for (let j = 0; j <= k; j++) zz.push(toRoom(i, o.offset + o.width * j / k, j % 2 ? -T * 0.15 : -T * 0.85));
       s += `<path class="arc" d="M${zz.map(q => q.join(',')).join('L')}"/>`;
     }
+    for (const q of trimPolys(o, Math.max(TRIM_DEPTH, px(3)))) s += `<polygon class="trim" points="${ptsAttr(q)}"/>`;
     const [lx, ly] = toRoom(i, o.offset + o.width / 2, -T - px(9));
     s += `<text class="oplabel" x="${lx}" y="${ly}" font-size="${px(10)}" text-anchor="middle" dominant-baseline="central" transform="rotate(${textAngle(i)} ${lx} ${ly})">${esc(opName(o))} · ${esc(fmt(o.width, 'in'))}</text>`;
     s += `<polygon points="${ptsAttr(quadUV(i, o.offset, o.offset + o.width, -T - px(6), px(6)))}" fill="transparent"/></g>`;
@@ -744,6 +763,7 @@ function inspectorHTML() {
       ${t.type === 'door' ? `<div class="row2"><label class="f">Swings<select id="fo-swing" data-bind="op:${t.id}:swing"><option value="in"${t.swing === 'in' ? ' selected' : ''}>Into room</option><option value="out"${t.swing === 'out' ? ' selected' : ''}>Out of room</option></select></label>
         <label class="f">Hinges on<select id="fo-hinge" data-bind="op:${t.id}:hinge"><option value="start"${t.hinge === 'start' ? ' selected' : ''}>Side nearer that corner</option><option value="end"${t.hinge === 'end' ? ' selected' : ''}>Far side</option></select></label></div>`
         : lenInput('fo-clear', `op:${t.id}:clear`, t.clear || 0, 'in', t.type === 'window' ? 'Keep clear in front (0 = furniture can go under it)' : 'Keep clear in front')}
+      ${lenInput('fo-trim', `op:${t.id}:trim`, t.trim || 0, 'in', 'Trim each side <span class="sub">casing around the frame; 0 if none</span>')}
       <div class="btns"><button class="btn danger" data-act="del">Delete</button></div>
       <p class="note">The blue line on the plan shows which corner the distance is measured from. You can also drag it along the wall.${t.type === 'door' ? ' Furniture in the shaded swing turns red.' : ''}</p></section>`;
   }
@@ -852,7 +872,7 @@ function render() {
 /* ---------- actions ---------- */
 function freeSpot(w, d) {
   const B = bounds(), step = 6;
-  const zones = S.openings.map(zoneOf).filter(Boolean);
+  const zones = [...S.openings.map(zoneOf).filter(Boolean), ...S.openings.flatMap(o => trimPolys(o))];
   const solid = S.items.filter(i => i.kind !== 'rug').map(bbox);
   const cx = B.x + B.w / 2, cy = B.y + B.h / 2, cands = [];
   for (let y = B.y; y + d <= B.y + B.h; y += step) for (let x = B.x; x + w <= B.x + B.w; x += step) cands.push({ x, y });
@@ -880,7 +900,7 @@ function addOpening(type) {
     let best = 0, bl = -1;
     pts().forEach((_, i) => { const free = wallLen(i) - S.openings.filter(o => o.wall === i).reduce((a, o) => a + o.width, 0); if (free > bl) { bl = free; best = i; } });
     const L = wallLen(best), w = Math.min(width, L);
-    const o = { id: uid(), type, wall: best, width: w, offset: r2(Math.max(0, (L - w) / 2)), swing: 'in', hinge: 'start', clear };
+    const o = { id: uid(), type, wall: best, width: w, offset: r2(Math.max(0, (L - w) / 2)), swing: 'in', hinge: 'start', clear, trim: type === 'window' ? 0 : TRIM_DEFAULT };
     S.openings.push(o); sel = { type: 'op', id: o.id };
   });
 }
@@ -933,11 +953,11 @@ function delSel() {
 }
 function handleField(el) {
   const [scope, id, key] = el.dataset.bind.split(':');
-  const lenKeys = ['w', 'd', 'x', 'y', 'width', 'offset', 'clear', 'len'];
+  const lenKeys = ['w', 'd', 'x', 'y', 'width', 'offset', 'clear', 'len', 'trim'];
   let val = el.value;
   if (lenKeys.includes(key)) {
     val = parseLen(val);
-    const min = (key === 'x' || key === 'y' || key === 'offset' || key === 'clear') ? 0 : 1;
+    const min = (key === 'x' || key === 'y' || key === 'offset' || key === 'clear' || key === 'trim') ? 0 : 1;
     if (!isFinite(val) || val < min || val > 2400) { el.classList.add('err'); el.title = 'Try something like 36, 3\' 0", or 90 cm'; return; }
     val = Math.round(val * 100) / 100;
   } else if (key === 'name') { val = val.trim() || (scope === 'room' ? 'Untitled' : 'Item'); }
@@ -1061,6 +1081,11 @@ function snapItem(it, nx, ny) {
     if (Math.abs(a[0] - c[0]) < 1e-6) xs.push(a[0], a[0] - b.w);
     if (Math.abs(a[1] - c[1]) < 1e-6) ys.push(a[1], a[1] - b.h);
   }
+  for (const o of S.openings) {
+    const w = wallSeg(o.wall), tz = trimZones(o);
+    const ends = [o.offset - (tz.length && tz[0][1] === o.offset ? tz[0][1] - tz[0][0] : 0), o.offset + o.width + (tz.length && tz[tz.length - 1][0] === o.offset + o.width ? tz[tz.length - 1][1] - tz[tz.length - 1][0] : 0)];
+    for (const u of ends) { const [x, y] = toRoom(o.wall, u, 0); if (Math.abs(w.uy) < 1e-6) xs.push(x, x - b.w); if (Math.abs(w.ux) < 1e-6) ys.push(y, y - b.h); }
+  }
   for (const o of S.items) {
     if (o === it) continue; const ob = bbox(o);
     xs.push(ob.x + ob.w, ob.x - b.w, ob.x, ob.x + ob.w - b.w);
@@ -1074,7 +1099,7 @@ function snapPoint(q) {
   const tol = 10 / ppi, p = pts(), xs = [], ys = [];
   for (const [x, y] of p) { xs.push(x); ys.push(y); }
   for (const o of S.items) { const b = bbox(o); xs.push(b.x, b.x + b.w); ys.push(b.y, b.y + b.h); }
-  for (const o of S.openings) for (const u of [o.offset, o.offset + o.width]) { const [x, y] = toRoom(o.wall, u, 0); xs.push(x); ys.push(y); }
+  for (const o of S.openings) for (const u of [o.offset, o.offset + o.width, ...trimZones(o).flat()]) { const [x, y] = toRoom(o.wall, u, 0); xs.push(x); ys.push(y); }
   const sx = pick(q.x, xs, tol), sy = pick(q.y, ys, tol);
   const out = { x: sx != null ? sx : q.x, y: sy != null ? sy : q.y };
   if (sx == null || sy == null) { // otherwise slide onto a nearby wall (handles angled walls)
